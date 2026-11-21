@@ -4,8 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#1b1d21">
+<meta name="color-scheme" content="dark">
 <title>Arch City Run</title>
 <meta name="description" content="Skate 2.3 miles of real Columbus, Ohio: under the Short North arches, through downtown and over the Scioto to COSI. Rebuilt in 3D from open map, lidar and terrain data.">
+<link rel="canonical" href="https://arch-city-run.shafe.dev/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Arch City Run">
+<meta property="og:title" content="Arch City Run">
+<meta property="og:description" content="A longboard run down the real High Street in Columbus, Ohio: under the Short North arches, through downtown and over the Scioto to COSI. Built in 3D from open data.">
+<meta property="og:url" content="https://arch-city-run.shafe.dev/">
+<meta property="og:image" content="https://arch-city-run.shafe.dev/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A longboarder rolling down High Street in Columbus toward the Short North arches at golden hour.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Arch City Run">
+<meta name="twitter:description" content="A longboard run down the real High Street in Columbus, Ohio, built in 3D from open data.">
+<meta name="twitter:image" content="https://arch-city-run.shafe.dev/og.jpg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1d21'/%3E%3Cpath d='M10 50V38a22 22 0 0 1 44 0v12' fill='none' stroke='%23ffb347' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='46' r='7' fill='%23b3202c'/%3E%3C/svg%3E">
 <style>
   :root { --red: #c22a36; --gold: #ffbf47; --ink: #14161a; --panel: rgba(18, 20, 24, .74); --line: rgba(255, 255, 255, .14); --sign: #0b6a3b;
@@ -13,23 +28,28 @@
     --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: #1b1d21; overflow: hidden; overscroll-behavior: none; font-family: var(--font); color: #fff; -webkit-user-select: none; user-select: none; touch-action: none; }
-  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; opacity: 0; transition: opacity .7s; }
+  canvas#gl.live { opacity: 1; }
   button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+  button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   [hidden] { display: none !important; }
   .num { font-variant-numeric: tabular-nums; }
 
   /* ---------- in-run HUD ---------- */
-  #hud { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; }
-  #hud.on { opacity: 1; }
+  /* off = faded AND out of reach: visibility drops when the fade ends, `inert` (set from JS) at once */
+  #hud { position: fixed; inset: 0; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .35s, visibility 0s .35s; }
+  #hud.on { opacity: 1; visibility: visible; transition: opacity .35s; }
+  #hud.frozen, #hud.frozen * { animation-play-state: paused !important; }
   #prog { position: absolute; left: 0; top: 0; height: 4px; width: 100%; background: rgba(0, 0, 0, .35); }
-  #prog i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--red), var(--gold)); }
+  #prog i { display: block; height: 100%; width: 100%; transform: scaleX(0); transform-origin: 0 50%; background: linear-gradient(90deg, var(--red), var(--gold)); }
   .chip { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   #score { position: absolute; left: calc(12px + var(--sl)); top: calc(14px + var(--st)); padding: 6px 12px 7px; display: flex; align-items: center; gap: 10px; min-width: 150px; }
   #score small, #speed small { display: block; font-size: 11px; letter-spacing: .14em; opacity: .7; line-height: 1; }
   #score > div { flex: none; }
   #scoreV { font-size: 28px; font-weight: 700; line-height: 1.05; white-space: nowrap; min-width: 4.2ch; }
   #mult { margin-left: auto; font-size: 20px; font-weight: 800; color: var(--ink); background: var(--gold); border-radius: 8px; padding: 1px 8px 2px; min-width: 40px; text-align: center; transition: transform .15s; }
-  #mult.pop { transform: scale(1.3); }
+  #mult.bump { animation: bump .16s ease-out; }
+  @keyframes bump { 50% { transform: scale(1.3); } }
   #mult.one { background: rgba(255, 255, 255, .16); color: #fff; }
   #right { position: absolute; right: calc(12px + var(--sr)); top: calc(14px + var(--st)); display: flex; gap: 8px; align-items: stretch; pointer-events: auto; }
   #speed { padding: 6px 12px 7px; text-align: right; min-width: 78px; }
@@ -64,8 +84,8 @@
   #hint kbd { font: inherit; background: rgba(255, 255, 255, .16); border-radius: 6px; padding: 0 7px 1px; margin: 0 1px; }
 
   /* ---------- overlays ---------- */
-  .ov { position: fixed; inset: 0; display: flex; pointer-events: none; opacity: 0; transition: opacity .4s; }
-  .ov.on { opacity: 1; pointer-events: auto; }
+  .ov { position: fixed; inset: 0; display: flex; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .4s, visibility 0s .4s; }
+  .ov.on { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity .4s; }
   #title { align-items: flex-end; background: linear-gradient(0deg, rgba(14, 15, 18, .86) 0%, rgba(14, 15, 18, .5) 36%, rgba(14, 15, 18, 0) 62%); }
   #title .box { width: min(520px, 100%); padding: 0 calc(22px + var(--sr)) calc(22px + var(--sb)) calc(22px + var(--sl)); }
   .kick { font-size: 15px; font-weight: 600; letter-spacing: .22em; color: var(--gold); }
@@ -77,7 +97,7 @@
   .go:hover { filter: brightness(1.1); } .go:active { transform: scale(.98); }
   .go[disabled] { background: #3a3d44; box-shadow: none; cursor: progress; font-size: 19px; letter-spacing: .04em; }
   .go i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(255, 191, 71, .34); transition: width .2s; }
-  .go span { position: relative; }
+  .go span { position: relative; white-space: nowrap; }
   .ghost { height: 60px; padding: 0 18px; border-radius: 14px; background: rgba(255, 255, 255, .13); border: 1px solid var(--line); font-size: 19px; font-weight: 700; letter-spacing: .04em; }
   .ghost:hover { background: rgba(255, 255, 255, .2); }
   .ghost.sq { width: 60px; padding: 0; display: grid; place-items: center; }
@@ -89,17 +109,22 @@
   #best { font-size: 16px; font-weight: 600; margin: 0 0 8px; color: var(--gold); min-height: 20px; }
   #end, #pause { align-items: center; justify-content: center; background: rgba(12, 13, 16, .5); padding: 16px; }
   .card { width: min(430px, 100%); background: rgba(20, 22, 26, .92); border: 1px solid var(--line); border-radius: 20px; padding: 22px 22px 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+  .card:focus { outline: none; }
   .card h2 { margin: 0; font-size: 34px; line-height: 1; font-weight: 800; }
+  #endRow { transition: opacity .25s; } #end.locked #endRow { opacity: .35; }
   .card .sub { margin: 4px 0 12px; font: 15px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; opacity: .8; }
   #endScore { font-size: 62px; line-height: 1; font-weight: 800; color: var(--gold); }
   #medal { display: inline-block; margin: 6px 0 12px; font-size: 16px; font-weight: 700; letter-spacing: .1em; padding: 2px 12px 3px; border-radius: 999px; background: rgba(255, 191, 71, .16); color: var(--gold); }
   .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; margin: 0 0 18px; font-size: 18px; }
   .stats div { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 3px; }
-  .stats span { opacity: .72; } .stats b { font-weight: 700; }
+  .stats span { opacity: .72; white-space: nowrap; } .stats b { font-weight: 700; white-space: nowrap; margin-left: 10px; }
   #pause .card { width: min(340px, 100%); } #pause .col { display: grid; gap: 10px; margin-top: 16px; } #pause .go, #pause .ghost { height: 54px; width: 100%; flex: none; }
   #fade { position: fixed; inset: 0; background: #0f1013; opacity: 0; pointer-events: none; transition: opacity .32s; }
   #fade.on { opacity: 1; }
   #err { position: fixed; left: 16px; right: 16px; top: 40%; text-align: center; font: 17px/1.4 system-ui, sans-serif; }
+  #ctx { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(12, 13, 16, .82); padding: 16px; }
+  #ctx button { max-width: 340px; padding: 16px 22px; border-radius: 14px; background: var(--red); font-size: 21px; font-weight: 700; line-height: 1.2; }
+  #stats { position: fixed; left: calc(8px + var(--sl)); bottom: calc(4px + var(--sb)); font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace; color: #d6f5d0; background: rgba(0, 0, 0, .55); padding: 1px 6px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
 
   @media (max-width: 620px) {
     .kick { font-size: 13px; letter-spacing: .15em; }
@@ -110,6 +135,11 @@
     #hint { max-width: calc(100vw - 132px); font-size: 16px; padding: 7px 11px 8px; }
     #lm { width: min(330px, calc(100vw - 132px)); padding: 8px 11px 9px; } #lm b { font-size: 19px; } #lm p { font-size: 14px; }
   }
+  @media (max-width: 430px) {
+    .card { padding: 18px 18px 16px; } .card h2 { font-size: 29px; } #endScore { font-size: 54px; }
+    .stats { grid-template-columns: 1fr; gap: 4px; font-size: 17px; margin-bottom: 14px; }
+    #end .go { font-size: 22px; letter-spacing: .05em; } #end .ghost { padding: 0 14px; }
+  }
   @media (max-height: 460px) {
     #title { background: linear-gradient(90deg, rgba(14, 15, 18, .86) 0%, rgba(14, 15, 18, .55) 46%, rgba(14, 15, 18, 0) 72%); align-items: center; }
     h1 { font-size: 50px; } .lede { font-size: 15px; margin-bottom: 10px; } .keys { margin: 9px 0 6px; font-size: 15px; } .go, .ghost { height: 50px; } .ghost.sq { width: 50px; }
@@ -119,11 +149,54 @@
   }
 </style>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<script>
+  // The city is the biggest download: start it before any module has been fetched, and count bytes for the loader.
+  (function () {
+    var L = window.__cityLoad = { got: 0, total: 0 };
+    L.data = fetch('./data/city.json').then(function (r) {
+      if (!r.ok) throw new Error('map data ' + r.status);
+      var len = +r.headers.get('content-length') || 0;
+      L.total = r.headers.get('content-encoding') ? len * 3 : len;      // compressed length: the decoded stream is about three times that
+      if (!r.body || !window.TextDecoder) return r.json();
+      var rd = r.body.getReader(), dec = new TextDecoder(), parts = [];
+      return (function pump() { return rd.read().then(function (x) {
+        if (x.done) { parts.push(dec.decode()); return JSON.parse(parts.join('')); }
+        L.got += x.value.length; parts.push(dec.decode(x.value, { stream: true })); return pump();
+      }); })();
+    });
+    L.data.catch(function () {});      // main.js reports the failure
+    // until main.js has arrived and takes the bar over, show the download filling its share of it (24 %)
+    var t = setInterval(function () {
+      var bar = document.getElementById('loadBar');
+      if (L.app) clearInterval(t); else if (bar && L.total) bar.style.width = Math.round(24 * Math.min(1, L.got / L.total)) + '%';
+    }, 120);
+  })();
+</script>
+<link rel="modulepreload" href="./vendor/three.module.min.js">
+<link rel="modulepreload" href="./js/main.js">
+<link rel="modulepreload" href="./js/world.js">
+<link rel="modulepreload" href="./js/game.js">
+<link rel="modulepreload" href="./js/props.js">
+<link rel="modulepreload" href="./js/util.js">
+<link rel="modulepreload" href="./js/audio.js">
+<link rel="modulepreload" href="./js/app/bus.js">
+<link rel="modulepreload" href="./js/app/store.js">
+<link rel="modulepreload" href="./js/app/quality.js">
+<link rel="modulepreload" href="./js/app/loader.js">
+<link rel="modulepreload" href="./js/app/events.js">
+<link rel="modulepreload" href="./js/app/results.js">
+<link rel="modulepreload" href="./js/app/input.js">
+<link rel="modulepreload" href="./js/app/camera.js">
+<link rel="modulepreload" href="./js/app/hud.js">
+<link rel="modulepreload" href="./js/app/sound.js">
+<link rel="modulepreload" href="./js/app/title.js">
+<link rel="modulepreload" href="./js/app/flow.js">
+<link rel="modulepreload" href="./js/app/loop.js">
 </head>
 <body>
-<canvas id="gl" tabindex="0" aria-label="Arch City Run game view"></canvas>
+<canvas id="gl" tabindex="-1" aria-label="Arch City Run game view"></canvas>
 
-<div id="hud" aria-hidden="true">
+<div id="hud" inert>
   <div id="prog"><i id="progV"></i></div>
   <div id="score" class="chip"><div><small>SCORE</small><div id="scoreV" class="num">0</div></div><div id="mult" class="one num">×1</div></div>
   <div id="where"><div id="street">N HIGH ST</div><div id="next">&nbsp;</div></div>
@@ -147,7 +220,7 @@
     <p class="lede">Skate the real High Street: under the Short North arches, through downtown, and over the Scioto to COSI.</p>
     <p id="best"></p>
     <div class="row">
-      <button class="go" id="play" disabled><i id="loadBar"></i><span id="playT">Building Columbus…</span></button>
+      <button class="go" id="play" disabled><i id="loadBar"></i><span id="playT">Fetching the map…</span></button>
       <button class="ghost sq" id="sndBtn2" aria-label="Sound on or off"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M17 8.5a5 5 0 0 1 0 7"/></svg></button>
     </div>
     <div class="keys" id="keys"></div>
@@ -155,8 +228,8 @@
   </div>
 </div>
 
-<div id="end" class="ov">
-  <div class="card">
+<div id="end" class="ov" inert>
+  <div class="card" id="endCard" role="dialog" aria-modal="true" aria-labelledby="endH" tabindex="-1">
     <h2 id="endH">You made it to COSI</h2>
     <p class="sub" id="endSub"></p>
     <div id="endScore" class="num">0</div>
@@ -164,19 +237,21 @@
     <div class="stats">
       <div><span>Time</span><b id="stTime" class="num"></b></div><div><span>Top speed</span><b id="stTop" class="num"></b></div>
       <div><span>Buckeyes</span><b id="stNuts" class="num"></b></div><div><span>Arches</span><b id="stArch" class="num"></b></div>
-      <div><span>Tricks</span><b id="stTricks" class="num"></b></div><div><span>Wipeouts</span><b id="stHits" class="num"></b></div>
+      <div><span id="stTricksL">Tricks</span><b id="stTricks" class="num"></b></div><div><span>Wipeouts</span><b id="stHits" class="num"></b></div>
     </div>
-    <div class="row"><button class="go" id="again"><span>RUN IT AGAIN</span></button><button class="ghost" id="toTitle">Title</button></div>
+    <div class="row" id="endRow"><button class="go" id="again"><span>RUN IT AGAIN</span></button><button class="ghost" id="toTitle">Title</button></div>
   </div>
 </div>
 
-<div id="pause" class="ov">
-  <div class="card"><h2>Paused</h2>
+<div id="pause" class="ov" inert>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="pauseH"><h2 id="pauseH">Paused</h2>
     <div class="col"><button class="go" id="resume"><span>RESUME</span></button><button class="ghost" id="restart">Restart run</button><button class="ghost" id="sndBtn3">Sound: on</button><button class="ghost" id="quit">Back to title</button></div>
   </div>
 </div>
 
 <div id="fade"></div>
+<div id="ctx" hidden><button id="ctxBtn">Graphics were reset. Tap to reload.</button></div>
+<div id="stats" hidden></div>
 <script type="module" src="./js/main.js"></script>
 </body>
 </html>

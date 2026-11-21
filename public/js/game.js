@@ -136,8 +136,10 @@ export class Game {
         for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2) { ctx.fillStyle = '#17181a'; ctx.fillRect(i * 40, j * 40, 40, 40); ctx.fillRect(w - 160 + i * 40, j * 40, 40, 40); }
         ctx.fillStyle = '#b3202c'; ctx.font = '800 104px "Arial Narrow","Helvetica Neue",Arial,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('FINISH  ·  COSI', w / 2, h / 2 + 6);
       });
-      const ban = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 + 1.4, 1.85), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })); ban.material.color.setScalar(0.86);
+      // one single-sided face per side, so the text reads the right way round on the approach and in the victory shot
+      const ban = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 + 1.4, 1.85), new THREE.MeshBasicMaterial({ map: tex })); ban.material.color.setScalar(0.86);
       ban.position.set(o.x, o.y + 6.3, o.z); ban.rotation.y = o.yaw + Math.PI; this.scene.add(ban);
+      const back = ban.clone(); back.rotation.y = o.yaw; this.scene.add(back);
     }
   }
 
