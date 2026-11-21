@@ -1,9 +1,9 @@
-// Static-files Worker: serves public/ at arch-city-run.shafe.dev
+// Static-files Worker: serves public/ at cbus-run.shafe.dev
 {
-  "name": "arch-city-run",
+  "name": "cbus-run",
   "compatibility_date": "2025-07-15",
   "assets": { "directory": "./public" },
   "routes": [
-    { "pattern": "arch-city-run.shafe.dev", "custom_domain": true }
+    { "pattern": "cbus-run.shafe.dev", "custom_domain": true }
   ]
 }

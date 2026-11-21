@@ -1,5 +1,7 @@
 # Arch City Run
 
+**Play it at https://cbus-run.shafe.dev**
+
 A lane-runner on a longboard through 2.3 miles of real Columbus, Ohio: down North High Street
 under the 17 Short North arches, over the I-670 cap, through downtown past the Statehouse, then
 west on Broad Street across the Scioto to the finish line at COSI.
@@ -20,14 +22,24 @@ What is invented: facades and window patterns, the traffic and construction clut
 
 ## Play
 
-Arrow keys or A/D change lanes, Space or Up jumps, Down ducks, P pauses, M mutes.
-On a phone: swipe to change lanes, swipe up or tap to jump, swipe down to duck.
+- Keyboard: arrow keys or A/D change lanes, Space, Up or W jumps, Down or S ducks, P or Esc pauses,
+  M mutes, R or Enter rides again from the results card.
+- Phone: one swipe left or right moves one lane, swipe up or tap to jump, swipe down to duck.
+- The run pauses by itself when the tab or window loses focus.
 
 ## Run locally
 
     python3 -m http.server 8811 -d public
 
-No build step. three.js r170 is vendored in `public/vendor/`.
+No build step and no packages. three.js r170 is vendored in `public/vendor/`.
+`public/js/main.js` boots the app shell in `public/js/app/` (input, flow, HUD, camera, quality,
+sound); `world.js` builds the city, `game.js` runs the skater, course and traffic.
+
+## Deploy
+
+`public/` is served by a static-assets Cloudflare Worker (`wrangler.jsonc`) at cbus-run.shafe.dev:
+
+    wrangler deploy
 
 ## Rebuild the city data
 
@@ -39,5 +51,21 @@ box 39.953,-83.016 to 39.991,-82.990), `structs-*.json` (USA Structures feature 
 
 To move the route, change the start/end points and `ROUTE_NAMES` near the top of that script.
 
-`tools/shot.mjs` and `tools/audit.mjs` are dev helpers (headless screenshots, layout audit); they
-borrow `playwright-core` from a sibling project. `?bot=1&auto=1` lets a test pilot skate the route.
+## Dev tools
+
+They drive headless Chrome with `playwright-core` borrowed from the sibling `arabic-sound-lab`
+checkout (see `tools/drive.mjs`); nothing is installed here.
+
+- `node tools/flowtest.mjs <url> --score=392827` — regression test of input, flow, focus, quality
+  and scoring (the score is what the test pilot makes on a fixed-step run).
+- `node tools/audit.mjs <outDir> <url>` — layout, focus and touch audit at seven screen sizes.
+- `node tools/shot.mjs <outDir> '<json steps>'` — scripted screenshots.
+- URL flags: `?bot=1&auto=1` lets a test pilot skate the route, `&ts=4` runs it 4x fast,
+  `?q=low|mid|high` pins the quality tier, `?stats=1` shows frame stats.
+
+## Licence
+
+Code: MIT (see `LICENSE`). three.js: MIT (`public/vendor/three.LICENSE`).
+`public/data/city.json` is derived from OpenStreetMap and is available under the
+[Open Database License](https://opendatacommons.org/licenses/odbl/), © OpenStreetMap contributors;
+it also carries USGS 3DEP and FEMA / ORNL USA Structures values (US government open data).
