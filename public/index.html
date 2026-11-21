@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#1b1d21">
+<title>Arch City Run</title>
+<meta name="description" content="Skate 2.3 miles of real Columbus, Ohio: under the Short North arches, through downtown and over the Scioto to COSI. Rebuilt in 3D from open map, lidar and terrain data.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1d21'/%3E%3Cpath d='M10 50V38a22 22 0 0 1 44 0v12' fill='none' stroke='%23ffb347' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='46' r='7' fill='%23b3202c'/%3E%3C/svg%3E">
+<style>
+  :root { --red: #c22a36; --gold: #ffbf47; --ink: #14161a; --panel: rgba(18, 20, 24, .74); --line: rgba(255, 255, 255, .14); --sign: #0b6a3b;
+    --font: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+    --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #1b1d21; overflow: hidden; overscroll-behavior: none; font-family: var(--font); color: #fff; -webkit-user-select: none; user-select: none; touch-action: none; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+  [hidden] { display: none !important; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- in-run HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; }
+  #hud.on { opacity: 1; }
+  #prog { position: absolute; left: 0; top: 0; height: 4px; width: 100%; background: rgba(0, 0, 0, .35); }
+  #prog i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--red), var(--gold)); }
+  .chip { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #score { position: absolute; left: calc(12px + var(--sl)); top: calc(14px + var(--st)); padding: 6px 12px 7px; display: flex; align-items: center; gap: 10px; min-width: 150px; }
+  #score small, #speed small { display: block; font-size: 11px; letter-spacing: .14em; opacity: .7; line-height: 1; }
+  #score > div { flex: none; }
+  #scoreV { font-size: 28px; font-weight: 700; line-height: 1.05; white-space: nowrap; min-width: 4.2ch; }
+  #mult { margin-left: auto; font-size: 20px; font-weight: 800; color: var(--ink); background: var(--gold); border-radius: 8px; padding: 1px 8px 2px; min-width: 40px; text-align: center; transition: transform .15s; }
+  #mult.pop { transform: scale(1.3); }
+  #mult.one { background: rgba(255, 255, 255, .16); color: #fff; }
+  #right { position: absolute; right: calc(12px + var(--sr)); top: calc(14px + var(--st)); display: flex; gap: 8px; align-items: stretch; pointer-events: auto; }
+  #speed { padding: 6px 12px 7px; text-align: right; min-width: 78px; }
+  #speedV { font-size: 28px; font-weight: 700; line-height: 1.05; }
+  .ib { width: 46px; min-height: 46px; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .ib svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .ib:active { background: rgba(60, 64, 72, .9); }
+  #where { position: absolute; left: 50%; top: calc(14px + var(--st)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; width: max-content; max-width: 46vw; }
+  #street { background: var(--sign); border: 2px solid #f1f1ec; border-radius: 7px; padding: 1px 14px 2px; font-size: 24px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; box-shadow: 0 2px 10px rgba(0, 0, 0, .35); }
+  #next { font-size: 15px; font-weight: 600; background: rgba(18, 20, 24, .7); border-radius: 999px; padding: 2px 11px 3px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  #next b { color: var(--gold); font-weight: 700; }
+  #district { position: absolute; left: 0; right: 0; top: 21%; text-align: center; font-size: clamp(30px, 6.5vw, 62px); font-weight: 800; letter-spacing: .2em; text-indent: .2em; text-transform: uppercase; opacity: 0; text-shadow: 0 3px 22px rgba(0, 0, 0, .55); }
+  #district.show { animation: dist 2.6s ease both; }
+  @keyframes dist { 0% { opacity: 0; letter-spacing: .5em; } 18% { opacity: 1; letter-spacing: .2em; } 75% { opacity: 1; } 100% { opacity: 0; } }
+  #pops { position: absolute; left: 0; right: 0; top: 41%; height: 0; }
+  .pop { position: absolute; left: 50%; white-space: nowrap; font-size: clamp(20px, 3.4vw, 30px); font-weight: 800; letter-spacing: .05em; text-shadow: 0 2px 10px rgba(0, 0, 0, .6); animation: pop 1.15s ease-out both; }
+  .pop span { color: var(--gold); margin-left: .35em; }
+  .pop.arch { color: #ffd9a0; } .pop.bad { color: #ff6b5e; }
+  @keyframes pop { 0% { transform: translate(-50%, 14px) scale(.7); opacity: 0; } 14% { transform: translate(-50%, 0) scale(1.08); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(-50%, -46px) scale(1); opacity: 0; } }
+  #lm { position: absolute; left: calc(12px + var(--sl)); bottom: calc(14px + var(--sb)); width: min(330px, calc(100vw - 150px - var(--sl) - var(--sr))); padding: 9px 13px 10px; opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s; }
+  #lm.show { opacity: 1; transform: none; }
+  #lm em { display: block; font-style: normal; font-size: 12px; letter-spacing: .14em; color: var(--gold); }
+  #lm b { display: block; font-size: 21px; line-height: 1.1; margin: 1px 0 3px; }
+  #lm p { margin: 0; font-size: 15px; line-height: 1.25; opacity: .86; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #map { position: absolute; right: calc(12px + var(--sr)); bottom: calc(14px + var(--sb)); width: 124px; height: 124px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .55); box-shadow: 0 4px 18px rgba(0, 0, 0, .4); background: #23262b; }
+  #count { position: absolute; left: 0; right: 0; top: 37%; text-align: center; font-size: clamp(80px, 22vw, 170px); font-weight: 800; text-shadow: 0 6px 30px rgba(0, 0, 0, .5); opacity: 0; }
+  #count.tick { animation: tick .7s ease-out both; }
+  @keyframes tick { 0% { opacity: 0; transform: scale(1.6); } 20% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(.9); } }
+  #hint { position: absolute; left: calc(12px + var(--sl)); bottom: calc(14px + var(--sb)); max-width: min(360px, calc(100vw - 150px - var(--sl) - var(--sr))); padding: 8px 14px 9px; font-size: 18px; font-weight: 600; line-height: 1.5; opacity: 0; transition: opacity .4s; }
+  #hint.show { opacity: 1; }
+  #hint span { white-space: nowrap; margin-right: 8px; display: inline-block; }
+  #hint kbd { font: inherit; background: rgba(255, 255, 255, .16); border-radius: 6px; padding: 0 7px 1px; margin: 0 1px; }
+
+  /* ---------- overlays ---------- */
+  .ov { position: fixed; inset: 0; display: flex; pointer-events: none; opacity: 0; transition: opacity .4s; }
+  .ov.on { opacity: 1; pointer-events: auto; }
+  #title { align-items: flex-end; background: linear-gradient(0deg, rgba(14, 15, 18, .86) 0%, rgba(14, 15, 18, .5) 36%, rgba(14, 15, 18, 0) 62%); }
+  #title .box { width: min(520px, 100%); padding: 0 calc(22px + var(--sr)) calc(22px + var(--sb)) calc(22px + var(--sl)); }
+  .kick { font-size: 15px; font-weight: 600; letter-spacing: .22em; color: var(--gold); }
+  h1 { margin: 2px 0 6px; font-size: clamp(50px, 13vw, 84px); line-height: .9; font-weight: 800; letter-spacing: .01em; text-shadow: 0 4px 26px rgba(0, 0, 0, .45); }
+  h1 span { color: var(--gold); }
+  .lede { margin: 0 0 16px; font: 17px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; opacity: .94; max-width: 30em; }
+  .row { display: flex; gap: 10px; align-items: stretch; }
+  .go { position: relative; flex: 1; height: 60px; border-radius: 14px; background: var(--red); font-size: 27px; font-weight: 800; letter-spacing: .08em; overflow: hidden; box-shadow: 0 8px 26px rgba(194, 42, 54, .42); transition: transform .12s, filter .12s; }
+  .go:hover { filter: brightness(1.1); } .go:active { transform: scale(.98); }
+  .go[disabled] { background: #3a3d44; box-shadow: none; cursor: progress; font-size: 19px; letter-spacing: .04em; }
+  .go i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(255, 191, 71, .34); transition: width .2s; }
+  .go span { position: relative; }
+  .ghost { height: 60px; padding: 0 18px; border-radius: 14px; background: rgba(255, 255, 255, .13); border: 1px solid var(--line); font-size: 19px; font-weight: 700; letter-spacing: .04em; }
+  .ghost:hover { background: rgba(255, 255, 255, .2); }
+  .ghost.sq { width: 60px; padding: 0; display: grid; place-items: center; }
+  .ghost.sq svg { width: 24px; height: 24px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .keys { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 14px 0 10px; font-size: 17px; font-weight: 600; }
+  .keys kbd { font: inherit; background: rgba(255, 255, 255, .16); border-radius: 6px; padding: 0 7px 1px; margin-right: 3px; }
+  .fine { margin: 0; font: 12px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; opacity: .62; }
+  .fine a { color: inherit; }
+  #best { font-size: 16px; font-weight: 600; margin: 0 0 8px; color: var(--gold); min-height: 20px; }
+  #end, #pause { align-items: center; justify-content: center; background: rgba(12, 13, 16, .5); padding: 16px; }
+  .card { width: min(430px, 100%); background: rgba(20, 22, 26, .92); border: 1px solid var(--line); border-radius: 20px; padding: 22px 22px 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+  .card h2 { margin: 0; font-size: 34px; line-height: 1; font-weight: 800; }
+  .card .sub { margin: 4px 0 12px; font: 15px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; opacity: .8; }
+  #endScore { font-size: 62px; line-height: 1; font-weight: 800; color: var(--gold); }
+  #medal { display: inline-block; margin: 6px 0 12px; font-size: 16px; font-weight: 700; letter-spacing: .1em; padding: 2px 12px 3px; border-radius: 999px; background: rgba(255, 191, 71, .16); color: var(--gold); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; margin: 0 0 18px; font-size: 18px; }
+  .stats div { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 3px; }
+  .stats span { opacity: .72; } .stats b { font-weight: 700; }
+  #pause .card { width: min(340px, 100%); } #pause .col { display: grid; gap: 10px; margin-top: 16px; } #pause .go, #pause .ghost { height: 54px; width: 100%; flex: none; }
+  #fade { position: fixed; inset: 0; background: #0f1013; opacity: 0; pointer-events: none; transition: opacity .32s; }
+  #fade.on { opacity: 1; }
+  #err { position: fixed; left: 16px; right: 16px; top: 40%; text-align: center; font: 17px/1.4 system-ui, sans-serif; }
+
+  @media (max-width: 620px) {
+    .kick { font-size: 13px; letter-spacing: .15em; }
+    #scoreV, #speedV { font-size: 23px; } #score { min-width: 124px; padding: 5px 10px 6px; gap: 8px; } #mult { font-size: 17px; min-width: 34px; padding: 1px 6px 2px; }
+    #speed { min-width: 62px; padding: 5px 10px 6px; } .ib { width: 44px; min-height: 44px; } #sndBtn { display: none; }
+    #where { top: calc(70px + var(--st)); max-width: 86vw; } #street { font-size: 21px; }
+    #map { width: 96px; height: 96px; } #district { top: 27%; }
+    #hint { max-width: calc(100vw - 132px); font-size: 16px; padding: 7px 11px 8px; }
+    #lm { width: min(330px, calc(100vw - 132px)); padding: 8px 11px 9px; } #lm b { font-size: 19px; } #lm p { font-size: 14px; }
+  }
+  @media (max-height: 460px) {
+    #title { background: linear-gradient(90deg, rgba(14, 15, 18, .86) 0%, rgba(14, 15, 18, .55) 46%, rgba(14, 15, 18, 0) 72%); align-items: center; }
+    h1 { font-size: 50px; } .lede { font-size: 15px; margin-bottom: 10px; } .keys { margin: 9px 0 6px; font-size: 15px; } .go, .ghost { height: 50px; } .ghost.sq { width: 50px; }
+    #title .box { padding-bottom: calc(12px + var(--sb)); } #district { top: 30%; } #pops { top: 44%; }
+    .card { padding: 14px 18px; } #endScore { font-size: 44px; } .stats { font-size: 16px; margin-bottom: 10px; gap: 3px 18px; } .card h2 { font-size: 26px; } .card .sub { margin-bottom: 6px; } #medal { margin: 3px 0 7px; }
+    #where { top: calc(10px + var(--st)); } #map { width: 92px; height: 92px; }
+  }
+</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<canvas id="gl" tabindex="0" aria-label="Arch City Run game view"></canvas>
+
+<div id="hud" aria-hidden="true">
+  <div id="prog"><i id="progV"></i></div>
+  <div id="score" class="chip"><div><small>SCORE</small><div id="scoreV" class="num">0</div></div><div id="mult" class="one num">×1</div></div>
+  <div id="where"><div id="street">N HIGH ST</div><div id="next">&nbsp;</div></div>
+  <div id="right">
+    <div id="speed" class="chip"><small>MPH</small><div id="speedV" class="num">0</div></div>
+    <button class="ib" id="sndBtn" aria-label="Sound on or off"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M17 8.5a5 5 0 0 1 0 7"/></svg></button>
+    <button class="ib" id="pauseBtn" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+  </div>
+  <div id="district"></div>
+  <div id="pops"></div>
+  <div id="count"></div>
+  <div id="hint" class="chip"></div>
+  <div id="lm" class="chip"><em id="lmSide"></em><b id="lmName"></b><p id="lmFact"></p></div>
+  <canvas id="map" width="248" height="248"></canvas>
+</div>
+
+<div id="title" class="ov on">
+  <div class="box">
+    <div class="kick">COLUMBUS, OHIO · 2.3 REAL MILES</div>
+    <h1>ARCH CITY <span>RUN</span></h1>
+    <p class="lede">Skate the real High Street: under the Short North arches, through downtown, and over the Scioto to COSI.</p>
+    <p id="best"></p>
+    <div class="row">
+      <button class="go" id="play" disabled><i id="loadBar"></i><span id="playT">Building Columbus…</span></button>
+      <button class="ghost sq" id="sndBtn2" aria-label="Sound on or off"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M17 8.5a5 5 0 0 1 0 7"/></svg></button>
+    </div>
+    <div class="keys" id="keys"></div>
+    <p class="fine">Every street, building, tree and arch is placed from open data: © OpenStreetMap contributors, USGS 3DEP terrain, FEMA / ORNL USA Structures lidar heights.</p>
+  </div>
+</div>
+
+<div id="end" class="ov">
+  <div class="card">
+    <h2 id="endH">You made it to COSI</h2>
+    <p class="sub" id="endSub"></p>
+    <div id="endScore" class="num">0</div>
+    <div id="medal"></div>
+    <div class="stats">
+      <div><span>Time</span><b id="stTime" class="num"></b></div><div><span>Top speed</span><b id="stTop" class="num"></b></div>
+      <div><span>Buckeyes</span><b id="stNuts" class="num"></b></div><div><span>Arches</span><b id="stArch" class="num"></b></div>
+      <div><span>Tricks</span><b id="stTricks" class="num"></b></div><div><span>Wipeouts</span><b id="stHits" class="num"></b></div>
+    </div>
+    <div class="row"><button class="go" id="again"><span>RUN IT AGAIN</span></button><button class="ghost" id="toTitle">Title</button></div>
+  </div>
+</div>
+
+<div id="pause" class="ov">
+  <div class="card"><h2>Paused</h2>
+    <div class="col"><button class="go" id="resume"><span>RESUME</span></button><button class="ghost" id="restart">Restart run</button><button class="ghost" id="sndBtn3">Sound: on</button><button class="ghost" id="quit">Back to title</button></div>
+  </div>
+</div>
+
+<div id="fade"></div>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
