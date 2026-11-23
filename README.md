@@ -1,4 +1,4 @@
-# Arch City Run
+# Cbus Run
 
 **Play it at https://cbus-run.shafe.dev**
 

@@ -1,7 +1,7 @@
 // End-of-run summary: paints the results card from the object of DESIGN.md section 6 (`game.results()`), and
 // builds that object for the v1 game, which has no results() of its own.
 export const MPH = 2.23694;
-const V1_TIERS = [[0, 'TOURIST'], [40000, 'LOCAL'], [100000, 'SHORT NORTH REGULAR'], [190000, 'HIGH STREET HERO'], [290000, 'ARCH CITY LEGEND']];
+const V1_TIERS = [[0, 'TOURIST'], [40000, 'LOCAL'], [100000, 'SHORT NORTH REGULAR'], [190000, 'HIGH STREET HERO'], [290000, 'CBUS LEGEND']];
 export const fmt = n => Math.round(n).toLocaleString('en-US');
 const clock = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const count = v => Array.isArray(v) ? v.length : v | 0;
